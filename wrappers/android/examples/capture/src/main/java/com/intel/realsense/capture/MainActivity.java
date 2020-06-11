@@ -27,6 +27,10 @@ import com.intel.realsense.librealsense.DepthFrame;
 import com.intel.realsense.librealsense.Frame;
 import com.intel.realsense.librealsense.Pointcloud;
 import com.intel.realsense.librealsense.Points;
+import com.intel.realsense.librealsense.Option;
+import com.intel.realsense.librealsense.Sensor;
+import com.intel.realsense.librealsense.Device;
+import com.intel.realsense.librealsense.PipelineProfile;
 
 
 
@@ -155,11 +159,12 @@ public class MainActivity extends AppCompatActivity {
                     {
 
                         try(Frame processed = test.applyFilter(mColorizer)) {
-                            //mGLSurfaceView.upload(processed);
+                            mGLSurfaceView.upload(processed);
                         }
                         try(Frame processed_pc = test.applyFilter(mPointcloud)) {
                             Points test_points = processed_pc.as(Extension.POINTS);
-                            mGLSurfaceView.upload(test_points);
+                            //mGLSurfaceView.upload(test_points);
+
                             /*float[] vertices = test_points.getVertices();
                             if(flag_debug)
                             {
@@ -206,9 +211,18 @@ public class MainActivity extends AppCompatActivity {
         {
             config.enableStream(StreamType.DEPTH, 640, 480);
             config.enableStream(StreamType.COLOR, 640, 480);
-            config.enableStream(StreamType.INFRARED, 640, 480);
+            //config.enableStream(StreamType.INFRARED, 640, 480);
 
-            mPipeline.start(config);
+
+            PipelineProfile pipe_profile = mPipeline.start(config);
+            Device test_device = pipe_profile.getDevice();
+            if (!test_device.isInAdvancedMode()){
+                test_device.toggleAdvancedMode(true);
+            }
+            Sensor mSensor = test_device.querySensors().get(0);
+            mSensor.setValue(Option.VISUAL_PRESET, 3);
+            float visual = mSensor.getValue(Option.VISUAL_PRESET);
+            //Log.d(TAG, "visualllllllllllllllllllllll: " + visual);
         }
     }
 
