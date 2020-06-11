@@ -3,6 +3,7 @@ package com.intel.realsense.capture;
 import android.Manifest;
 import android.content.Context;
 import android.content.pm.PackageManager;
+import android.graphics.Point;
 import android.os.Bundle;
 import android.os.Handler;
 import android.support.v4.app.ActivityCompat;
@@ -16,12 +17,19 @@ import com.intel.realsense.librealsense.Colorizer;
 import com.intel.realsense.librealsense.Config;
 import com.intel.realsense.librealsense.DeviceList;
 import com.intel.realsense.librealsense.DeviceListener;
+import com.intel.realsense.librealsense.Extension;
 import com.intel.realsense.librealsense.FrameSet;
 import com.intel.realsense.librealsense.GLRsSurfaceView;
 import com.intel.realsense.librealsense.Pipeline;
-import com.intel.realsense.librealsense.PipelineProfile;
 import com.intel.realsense.librealsense.RsContext;
 import com.intel.realsense.librealsense.StreamType;
+import com.intel.realsense.librealsense.DepthFrame;
+import com.intel.realsense.librealsense.Frame;
+import com.intel.realsense.librealsense.Pointcloud;
+import com.intel.realsense.librealsense.Points;
+
+
+
 
 public class MainActivity extends AppCompatActivity {
     private static final String TAG = "librs capture example";
@@ -38,6 +46,7 @@ public class MainActivity extends AppCompatActivity {
     private Pipeline mPipeline;
     private Colorizer mColorizer;
     private RsContext mRsContext;
+    private  Pointcloud mPointcloud;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -65,12 +74,6 @@ public class MainActivity extends AppCompatActivity {
     }
 
     @Override
-    protected void onDestroy() {
-        super.onDestroy();
-        mGLSurfaceView.close();
-    }
-
-    @Override
     public void onRequestPermissionsResult(int requestCode, String permissions[], int[] grantResults) {
         if (ContextCompat.checkSelfPermission(this, Manifest.permission.CAMERA) != PackageManager.PERMISSION_GRANTED) {
             ActivityCompat.requestPermissions(this, new String[]{Manifest.permission.CAMERA}, PERMISSIONS_REQUEST_CAMERA);
@@ -94,7 +97,6 @@ public class MainActivity extends AppCompatActivity {
         if(mRsContext != null)
             mRsContext.close();
         stop();
-        mColorizer.close();
         mPipeline.close();
     }
 
@@ -109,6 +111,7 @@ public class MainActivity extends AppCompatActivity {
 
         mPipeline = new Pipeline();
         mColorizer = new Colorizer();
+        mPointcloud = new Pointcloud();
 
         try(DeviceList dl = mRsContext.queryDevices()){
             if(dl.getDeviceCount() > 0) {
@@ -140,14 +143,55 @@ public class MainActivity extends AppCompatActivity {
         }
     };
 
+    boolean flag_debug = true;
     Runnable mStreaming = new Runnable() {
         @Override
         public void run() {
             try {
                 try(FrameSet frames = mPipeline.waitForFrames(1000)) {
-                    try(FrameSet processed = frames.applyFilter(mColorizer)) {
-                        mGLSurfaceView.upload(processed);
+
+
+                    try(Frame test = frames.first(StreamType.DEPTH))
+                    {
+
+                        try(Frame processed = test.applyFilter(mColorizer)) {
+                            //mGLSurfaceView.upload(processed);
+                        }
+                        try(Frame processed_pc = test.applyFilter(mPointcloud)) {
+                            Points test_points = processed_pc.as(Extension.POINTS);
+                            mGLSurfaceView.upload(test_points);
+                            /*float[] vertices = test_points.getVertices();
+                            if(flag_debug)
+                            {
+                                Log.d(TAG,  "verticessssssssssssssssssssssssssssssssssssssssssssssssssss: " + vertices[0]);
+                                flag_debug = false;
+                            }*/
+                        }
+
+
+                        /*int size_test = test.getDataSize();
+                        byte[] return_buff = new byte[size_test];
+                        test.getData(return_buff);
+                        Log.d(TAG, "msg sizeeeeeeeeeeeeeeeeeeeee: " + size_test);
+
+
+                        DepthFrame depth = test.as(Extension.DEPTH_FRAME);
+                        int size_depth = depth.getDataSize();
+                        byte[] return_buff_depth = new byte[size_depth];
+                        depth.getData(return_buff_depth);
+
+                        Pointcloud pc_test = new Pointcloud();
+                        pc_test.process(test);
+                        if(flag_debug)
+                        {
+                            Log.d(TAG,  "Frame return_bufffffffffffffffffffffffffffffffffffffff: " + return_buff);
+                            flag_debug = false;
+                        }*/
+
                     }
+                    /*try(FrameSet processed = frames.applyFilter(mColorizer)) {
+                        mGLSurfaceView.upload(processed);
+                    }*/
                 }
                 mHandler.post(mStreaming);
             }
@@ -162,8 +206,9 @@ public class MainActivity extends AppCompatActivity {
         {
             config.enableStream(StreamType.DEPTH, 640, 480);
             config.enableStream(StreamType.COLOR, 640, 480);
-            // try statement needed here to release resources allocated by the Pipeline:start() method
-            try(PipelineProfile pp = mPipeline.start(config)){}
+            config.enableStream(StreamType.INFRARED, 640, 480);
+
+            mPipeline.start(config);
         }
     }
 
@@ -190,7 +235,6 @@ public class MainActivity extends AppCompatActivity {
             mIsStreaming = false;
             mHandler.removeCallbacks(mStreaming);
             mPipeline.stop();
-            mGLSurfaceView.clear();
             Log.d(TAG, "streaming stopped successfully");
         } catch (Exception e) {
             Log.d(TAG, "failed to stop streaming");
